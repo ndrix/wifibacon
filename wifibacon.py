@@ -20,8 +20,10 @@ class SniffThread(Thread):
     Thread.__init__(self)
     global capturingPackets
     self.iface = str(iface)
+    self.channel = 1
+    self.counter = 0
     self.start()
-
+    
   def PcapStopFilter(self, x):
     return capturingPackets == False
 
@@ -38,7 +40,13 @@ class SniffThread(Thread):
           print "AP Mac: %s with SSID %s" %(pkt.addr2, pkt.info)
           print "total AP's:", len(ap_list.keys())
 
-      if pkt.haslayer(Dot11ProbeReq):
+        if pkt.ID == 3:
+          print "Channel", ord(pkt.info)
+        elif pkt.ID == 48:
+          print "WPA2"
+
+      # if pkt.haslayer(Dot11ProbeReq):
+      if pkt.type == 0 and pkt.subtype == 4: 
         if pkt.haslayer(Dot11Elt):
           if pkt.ID == 0:
             if str(pkt.info) == "":
@@ -57,11 +65,17 @@ class SniffThread(Thread):
                 client_list[pkt.addr2] = [pkt.info]
                 print "Probe: %s with SSID %s" %(pkt.addr2, pkt.info)
                 wx.CallAfter(Publisher.sendMessage, "addClient", '%s - %s' % (pkt.addr2, pkt.info))
-              print "total clients:", len(client_list.keys())
-          elif pkt.ID == 3:
-            print "Channel", ord(pkt.info)
-          elif pkt.ID == 48:
-            print "WPA2"
+                print "total clients:", len(client_list.keys())
+
+    # change the channel every X packets
+    self.counter += 1
+    if self.counter % 100 is 0:
+      self.counter = 0
+      self.channel += 1
+      if self.channel == 14:
+        self.channel = 1
+      os.system('iwconfig %s channel %d' % (self.iface, self.channel))
+      print "Now running on channel %d" % self.channel
     
 # ################################################################################
 class MainWindow(wx.Frame):
