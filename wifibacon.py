@@ -20,8 +20,6 @@ class SniffThread(Thread):
     Thread.__init__(self)
     global capturingPackets
     self.iface = str(iface)
-    self.channel = 1
-    self.counter = 0
     self.start()
     
   def PcapStopFilter(self, x):
@@ -35,15 +33,11 @@ class SniffThread(Thread):
     if pkt.haslayer(Dot11):
       if pkt.type == 0 and pkt.subtype == 8: # add AP
         if not ap_list.has_key(pkt.addr2):
-          ap_list[pkt.addr2] = pkt.info
-          wx.CallAfter(Publisher.sendMessage, "addAp", '%s - %s' % (pkt.addr2, pkt.info))
-          print "AP Mac: %s with SSID %s" %(pkt.addr2, pkt.info)
-          print "total AP's:", len(ap_list.keys())
-
-        if pkt.ID == 3:
-          print "Channel", ord(pkt.info)
-        elif pkt.ID == 48:
-          print "WPA2"
+          if len(pkt.info) > 0:
+            ap_list[pkt.addr2] = pkt.info
+            wx.CallAfter(Publisher.sendMessage, "addAp", '%s - %s' % (pkt.addr2, pkt.info))
+            print "AP Mac: %s with SSID %s" %(pkt.addr2, pkt.info)
+            print "total AP's:", len(ap_list.keys())
 
       # if pkt.haslayer(Dot11ProbeReq):
       if pkt.type == 0 and pkt.subtype == 4: 
@@ -67,26 +61,17 @@ class SniffThread(Thread):
                 wx.CallAfter(Publisher.sendMessage, "addClient", '%s - %s' % (pkt.addr2, pkt.info))
                 print "total clients:", len(client_list.keys())
 
-    # change the channel every X packets
-    self.counter += 1
-    if self.counter % 100 is 0:
-      self.counter = 0
-      self.channel += 1
-      if self.channel == 14:
-        self.channel = 1
-      os.system('iwconfig %s channel %d' % (self.iface, self.channel))
-      print "Now running on channel %d" % self.channel
     
 # ################################################################################
 class MainWindow(wx.Frame):
   def __init__(self, parent, title):
+    self.channel = 1
+    self.ChannelShifter = 0
+    self.ChannelShifterFreq = 100
     wx.Frame.__init__(self, None, wx.ID_ANY, "WIFI bac0n", size=(500,300))
     self.Bind(wx.EVT_CLOSE, self.OnClose)
 
     panel = wx.Panel(self, wx.ID_ANY)
-    self.apListBox = wx.ListBox(choices=[], parent = panel, pos=wx.Point(8,48), size=(232,200))
-    self.clientListBox = wx.ListBox(choices=[], parent = panel, pos=wx.Point(250,48), size=(232,200))
-
     # list of interfaces
     self.ifaceListBox = wx.ComboBox(choices=interfaces, value=interfaces[0], parent = panel, pos = wx.Point(8,8), size=(100, 30))
 
@@ -94,10 +79,25 @@ class MainWindow(wx.Frame):
     self.sniffButton = wx.Button(id=5, label='Start capture', parent=panel, pos=wx.Point(120,8))
     self.sniffButton.Bind(wx.EVT_BUTTON, self.ClickSniffButton, id=5)
 
+    # boxes for AP's and clients
+    self.apListBox = wx.ListBox(choices=[], parent = panel, pos=wx.Point(8,48), size=(232,200))
+    self.clientTree = wx.TreeCtrl(parent = panel, pos=wx.Point(250,48), size=(232,200), style = wx.TR_HIDE_ROOT|wx.TR_HAS_BUTTONS)
+    self.clientTreeRoot = self.clientTree.AddRoot("clients")
+
+    # Add slider for channel hopping - it's divided by 10 for ms
+    self.ChannelHoppingSliderLabel = wx.StaticText(parent=panel, label= "Channel hopping freq (250ms):", pos=wx.Point(8, 256))
+    self.ChannelHoppingSlider = wx.Slider(parent=panel,value=100,minValue=25,maxValue=500,size=(100,30),pos=wx.Point(170, 250))
+    self.ChannelHoppingSlider.Bind(wx.EVT_SCROLL, self.OnChannelSliderChange)
+
     Publisher.subscribe(self.AddAp, "addAp")
     Publisher.subscribe(self.AddClient, "addClient")
 
     self.Show(True)
+
+  def OnChannelSliderChange(self, event):
+    self.ChannelShifterFreq = (int(self.ChannelHoppingSlider.GetValue()) * 10)
+    self.ChannelHoppingSliderLabel.SetLabel("Channel hopping freq (%dms):" % self.ChannelShifterFreq)
+    
 
   def OnClose(self, event):
     self.setWlanMon(self.ifaceListBox.GetValue(), False)
@@ -108,7 +108,20 @@ class MainWindow(wx.Frame):
     self.apListBox.Append(msg.data)
 
   def AddClient(self, msg):
-    self.clientListBox.Append(msg.data)
+    # self.clientListBox.Append(msg.data)
+    self.clientTree.DeleteChildren(self.clientTreeRoot)
+    for client_mac in client_list.keys():
+      entry = self.clientTree.AppendItem(self.clientTreeRoot, "%s (%d)" % (client_mac, len(client_list[client_mac])))
+      for ssid in client_list[client_mac]:
+        self.clientTree.AppendItem(entry, ssid)
+
+  def onTimer(self):
+    self.channel += 1
+    if self.channel == 14:
+      self.channel = 1
+    os.system('iwconfig %s channel %d' % (self.ifaceListBox.GetValue(), self.channel))
+    print "Now running on channel %d" % self.channel
+    wx.CallLater(self.ChannelShifterFreq, self.onTimer)
 
   # set or bring adapter out of monitor mode
   def setWlanMon(self, iface, mode = True):
@@ -132,6 +145,7 @@ class MainWindow(wx.Frame):
         print "[-] Started capture"
         self.sniffButton.SetLabel("Stop capture")
         self.ifaceListBox.Disable()
+        self.ChannelShifter = wx.CallLater(self.ChannelShifterFreq, self.onTimer)
         SniffThread(self.ifaceListBox.GetValue())
         capturingPackets = True
     else:
@@ -140,8 +154,7 @@ class MainWindow(wx.Frame):
       self.ifaceListBox.Enable()
       capturingPackets = False
       self.sniffButton.SetLabel("Start capture")
-        
-
+      self.ChannelShifter.Stop()
 
 
 # ################################################################################
