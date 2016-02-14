@@ -4,10 +4,11 @@
 # more info - @ndrix
 
 from scapy.all import *
-import os, sys, signal, wx, time, subprocess
+import os, sys, signal, wx, time, subprocess, datetime
 from threading import Thread
 from wx.lib.pubsub import setuparg1
 from wx.lib.pubsub import pub as Publisher
+import xml.etree.cElementTree as ET
 
 ap_list = {}
 client_list = {}
@@ -79,6 +80,10 @@ class MainWindow(wx.Frame):
     self.sniffButton = wx.Button(id=5, label='Start capture', parent=panel, pos=wx.Point(120,8))
     self.sniffButton.Bind(wx.EVT_BUTTON, self.ClickSniffButton, id=5)
 
+    # button to save results
+    self.saveButton = wx.Button(id=6,label='Save results', parent=panel, pos = wx.Point(250, 8))
+    self.saveButton.Bind(wx.EVT_BUTTON, self.ClickSaveButton, id=6)
+
     # boxes for AP's and clients
     self.apListBox = wx.ListBox(choices=[], parent = panel, pos=wx.Point(8,48), size=(232,200))
     self.clientTree = wx.TreeCtrl(parent = panel, pos=wx.Point(250,48), size=(232,200), style = wx.TR_HIDE_ROOT|wx.TR_HAS_BUTTONS)
@@ -89,6 +94,7 @@ class MainWindow(wx.Frame):
     self.ChannelHoppingSlider = wx.Slider(parent=panel,value=100,minValue=25,maxValue=500,size=(100,30),pos=wx.Point(170, 250))
     self.ChannelHoppingSlider.Bind(wx.EVT_SCROLL, self.OnChannelSliderChange)
 
+    # pubsub things
     Publisher.subscribe(self.AddAp, "addAp")
     Publisher.subscribe(self.AddClient, "addClient")
 
@@ -121,7 +127,8 @@ class MainWindow(wx.Frame):
       self.channel = 1
     os.system('iwconfig %s channel %d' % (self.ifaceListBox.GetValue(), self.channel))
     print "Now running on channel %d" % self.channel
-    wx.CallLater(self.ChannelShifterFreq, self.onTimer)
+    if capturingPackets == True:
+      wx.CallLater(self.ChannelShifterFreq, self.onTimer)
 
   # set or bring adapter out of monitor mode
   def setWlanMon(self, iface, mode = True):
@@ -156,6 +163,31 @@ class MainWindow(wx.Frame):
       self.sniffButton.SetLabel("Start capture")
       self.ChannelShifter.Stop()
 
+  # saves all our results to XML
+  def ClickSaveButton(self, event):
+    saveFileDialog = wx.FileDialog(self, "Save XML", "","","XML files (*.xml)|*.xml", wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
+    if saveFileDialog.ShowModal() == wx.ID_CANCEL:
+      return
+    root = ET.Element("results")
+    ET.SubElement(root, "TimeStamp").text = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # write the AP list
+    aps = ET.SubElement(root, "AccessPoints")
+    for ap in ap_list.keys():
+      apx = ET.SubElement(aps, "AccessPoint")
+      ET.SubElement(apx, "SSID").text = ap_list[ap]
+      ET.SubElement(apx, "MAC").text = ap
+    
+    # write the clients list
+    clients = ET.SubElement(root, "Clients")
+    for c_mac in client_list.keys():
+      client = ET.SubElement(clients, "Client", mac=c_mac)
+      for ssid in client_list[c_mac]:
+        ET.SubElement(client, "SSID").text = ssid
+    
+    tree = ET.ElementTree(root)
+    tree.write(saveFileDialog.GetPath(), encoding="utf-8", xml_declaration=True)
+    
 
 # ################################################################################
 
