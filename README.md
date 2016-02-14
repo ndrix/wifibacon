@@ -5,7 +5,7 @@ Simple WLAN python script for wifi beacon capturing and all.  Mainly trying to m
 
 Here's how it looks on a (very badly) UI:
 
-![WifiBacon screen capturing packets](http://michaelhendrickx.com/misc/wifibacon.png)
+![WifiBacon screen capturing packets](http://michaelhendrickx.com/misc/wifibac0n.png)
 
 It's very simple to use, you select which interface you want to listen on; and press *Start Capture*.  You can, even while capturing packets, set the channel hopping frequency.
 
