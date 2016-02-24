@@ -54,12 +54,12 @@ class SniffThread(Thread):
                   ssids.append(pkt.info)
                   client_list[pkt.addr2] = ssids
                   print "Probe: %s with SSID %s" %(pkt.addr2, pkt.info)
-                  wx.CallAfter(Publisher.sendMessage, "addClient", '%s - %s' % (pkt.addr2, pkt.info))
+                  wx.CallAfter(Publisher.sendMessage, "addClient", '%s - %s' % (pkt.addr2, str(pkt.info)))
               else:
                 # we dont have this client
                 client_list[pkt.addr2] = [pkt.info]
                 print "Probe: %s with SSID %s" %(pkt.addr2, pkt.info)
-                wx.CallAfter(Publisher.sendMessage, "addClient", '%s - %s' % (pkt.addr2, pkt.info))
+                wx.CallAfter(Publisher.sendMessage, "addClient", '%s - %s' % (pkt.addr2, str(pkt.info)))
                 print "total clients:", len(client_list.keys())
 
     
@@ -114,12 +114,15 @@ class MainWindow(wx.Frame):
     self.apListBox.Append(msg.data)
 
   def AddClient(self, msg):
-    # self.clientListBox.Append(msg.data)
     self.clientTree.DeleteChildren(self.clientTreeRoot)
     for client_mac in client_list.keys():
       entry = self.clientTree.AppendItem(self.clientTreeRoot, "%s (%d)" % (client_mac, len(client_list[client_mac])))
       for ssid in client_list[client_mac]:
-        self.clientTree.AppendItem(entry, ssid)
+        try:
+          ssid = ssid.encode('ascii', 'ignore')
+          self.clientTree.AppendItem(entry, ssid)
+        except UnicodeDecodeError:
+          print ':'.join(x.encode('hex') for x in ssid)
 
   def onTimer(self):
     self.channel += 1
