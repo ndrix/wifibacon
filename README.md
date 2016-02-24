@@ -5,10 +5,10 @@ Simple WLAN python script for wifi beacon capturing and all.  Mainly trying to m
 
 Here's how it looks on a (very badly) UI:
 
-![WifiBacon screen capturing packets](http://michaelhendrickx.com/misc/wifibacon.png)
+![WifiBacon screen capturing packets](http://michaelhendrickx.com/misc/wifibac0n.png)
 
-It's very simple to use, you select which interface you want to listen on; and press *Start Capture*.  You can, even while capturing packets, set the channel hopping frequency.
+It's very simple to use, you select which interface you want to listen on; and press *Start Capture*.  You can, even while capturing packets, set the channel hopping frequency.  When you're done capturing, you can save it as an XML file to use with other programs.
 
 This tool will list the Access Points nearby, and the client's and what probe requests they're sending.  I got a bit inspired with [Khalilov's Infernal Wireless](https://github.com/entropy1337) tool.  
 
-It was just written to play around with wifi and scapy, nothing big.
+It was just written to play around with wx, wifi and scapy, nothing big.
